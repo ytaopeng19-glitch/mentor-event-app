@@ -48,7 +48,7 @@ st.subheader("行业导师职场领航计划·企业直聘专场")
 st.markdown("""
 欢迎报名参加本次活动！
 * **活动时间**：2026年3月29日 19:00 - 21:00 
-* **活动地点**：西教学楼4-104 
+* **活动地点**：西教学楼3-104 
 * **特邀企业**：广东瑞丰生态环境科技股份有限公司及16家区域农资龙头企业
 * **面向对象**：学院各年级有求职需求的学生
 """)
@@ -109,11 +109,15 @@ with st.form("registration_form"):
     
     interested_position = st.text_input("意向岗位 *", placeholder="请参考上方列表，如：管培生、区域经理、智慧农业研发等")
 
-    # --- 新增：是否参加模拟面试选项 ---
-    mock_interview = st.radio(
-        "是否报名参与现场【模拟面试】环节？ *",
-        options=["仅旁听学习", "报名模拟面试（需自带简历）"],
-        horizontal=True
+    # --- 更新：增加“会后交流”选项 ---
+    interaction_intent = st.radio(
+        "请选择您希望参与的互动环节 *",
+        options=[
+            "仅旁听学习", 
+            "会后与企业老总面对面交流（需自带简历）",
+            "报名现场模拟面试（需自带简历并上台展示）"
+        ],
+        horizontal=False # 改为垂直排列，方便阅读较长的选项文本
     )
     
     submitted = st.form_submit_button("立即报名，锁定直聘名额")
@@ -124,6 +128,7 @@ with st.form("registration_form"):
         elif degree_level in ["硕士研究生", "博士研究生"] and not research_direction:
             st.error("研究生同学请务必填写您的研究方向！")
         else:
+            # 存入数据库的数据结构保持不变，新选项作为文本直接写入 mock_interview 字段
             new_entry = {
                 "student_name": student_name,
                 "contact_info": contact_info,
@@ -131,12 +136,13 @@ with st.form("registration_form"):
                 "degree_level": degree_level,
                 "research_direction": research_direction if research_direction else "无",
                 "interested_position": interested_position,
-                "mock_interview": mock_interview # 写入数据库的新字段
+                "mock_interview": interaction_intent 
             }
             try:
                 response = supabase.table("registrations").insert(new_entry).execute()
-                if mock_interview == "报名模拟面试（需自带简历）":
-                    st.success(f"报名成功！请记得携带纸质版简历参加现场面试，期待在会场见到你，{student_name}同学。")
+                # 智能提示：如果是带有“简历”字眼的选项，弹窗额外提醒
+                if "需自带简历" in interaction_intent:
+                    st.success(f"报名成功！请务必提前准备好纸质版简历带到现场，祝求职顺利，{student_name}同学！")
                 else:
                     st.success(f"报名成功！期待在会场见到你，{student_name}同学。")
             except Exception as e:
@@ -155,7 +161,7 @@ if st.session_state['admin_logged_in']:
             df = pd.DataFrame(data)
             df['created_at'] = pd.to_datetime(df['created_at']).dt.tz_convert('Asia/Shanghai').dt.strftime('%Y-%m-%d %H:%M:%S')
             
-            # 更新重命名映射，加入模拟面试字段
+            # 优化后台表格显示名称
             df_display = df.rename(columns={
                 "id": "序号",
                 "created_at": "报名时间",
@@ -165,13 +171,11 @@ if st.session_state['admin_logged_in']:
                 "degree_level": "学历",
                 "research_direction": "研究方向",
                 "interested_position": "意向岗位",
-                "mock_interview": "模拟面试参与意向"
+                "mock_interview": "互动环节意向" # 名字更新得更贴切
             })
             
-            # 更新展示列
-            df_display = df_display[["序号", "报名时间", "姓名", "联系方式", "班级", "学历", "研究方向", "意向岗位", "模拟面试参与意向"]]
+            df_display = df_display[["序号", "报名时间", "姓名", "联系方式", "班级", "学历", "研究方向", "意向岗位", "互动环节意向"]]
             
-            # 布局排版：并排显示意向岗位统计和面试意向统计
             st.write("#### 📊 报名意向统计")
             col1, col2 = st.columns(2)
             
@@ -182,10 +186,11 @@ if st.session_state['admin_logged_in']:
                 st.bar_chart(position_counts.set_index('意向岗位'))
                 
             with col2:
-                st.write("**模拟面试参与比例**")
-                interview_counts = df_display['模拟面试参与意向'].value_counts().reset_index()
-                interview_counts.columns = ['选项', '人数']
-                st.bar_chart(interview_counts.set_index('选项'))
+                st.write("**互动环节参与比例**")
+                # 因为选项字数较多，我们直接用原数据统计展示图表
+                interaction_counts = df_display['互动环节意向'].value_counts().reset_index()
+                interaction_counts.columns = ['选项', '人数']
+                st.bar_chart(interaction_counts.set_index('选项'))
             
             st.write("#### 📋 详细名单")
             st.dataframe(df_display, use_container_width=True)
