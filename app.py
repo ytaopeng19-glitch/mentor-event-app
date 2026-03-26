@@ -55,10 +55,9 @@ st.markdown("""
 
 st.divider()
 
-# --- 新增：招聘岗位与企业信息展示区 ---
+# --- 招聘岗位与企业信息展示区 ---
 st.write("### 🔥 抢先看：本次直聘企业及高薪岗位")
 
-# 1. 核心岗位高亮展示
 st.info("""
 **🌟 核心招聘岗位及优厚待遇：**
 * 👨‍🔬 **智慧农业技术与设备研发**：年薪 15~20万
@@ -69,7 +68,6 @@ st.info("""
 *(注：绝大部分岗位面向本、硕应届生；瑞丰公司新媒体等岗位接受博士应聘，薪资面谈)*
 """)
 
-# 2. 17家参会企业一览表 (使用 expander 折叠，避免页面过长)
 with st.expander("点击查看完整 17 家参会企业及对应岗位分布", expanded=False):
     companies_data = [
         {"企业名称": "广东瑞丰生态环境科技股份有限公司", "招聘岗位": "管培生/区域经理/智慧农业研发/新媒体", "学历要求": "本/硕/博"},
@@ -109,8 +107,14 @@ with st.form("registration_form"):
     
     research_direction = st.text_input("研究方向（硕博生必填）", placeholder="如：智慧农业、生物技术、植物保护等相关方向")
     
-    # 结合上方的岗位信息，优化这里的 placeholder 提示
     interested_position = st.text_input("意向岗位 *", placeholder="请参考上方列表，如：管培生、区域经理、智慧农业研发等")
+
+    # --- 新增：是否参加模拟面试选项 ---
+    mock_interview = st.radio(
+        "是否报名参与现场【模拟面试】环节？ *",
+        options=["仅旁听学习", "报名模拟面试（需自带简历）"],
+        horizontal=True
+    )
     
     submitted = st.form_submit_button("立即报名，锁定直聘名额")
     
@@ -126,11 +130,15 @@ with st.form("registration_form"):
                 "student_class": student_class,
                 "degree_level": degree_level,
                 "research_direction": research_direction if research_direction else "无",
-                "interested_position": interested_position 
+                "interested_position": interested_position,
+                "mock_interview": mock_interview # 写入数据库的新字段
             }
             try:
                 response = supabase.table("registrations").insert(new_entry).execute()
-                st.success(f"报名成功！期待在会场见到你，{student_name}同学。")
+                if mock_interview == "报名模拟面试（需自带简历）":
+                    st.success(f"报名成功！请记得携带纸质版简历参加现场面试，期待在会场见到你，{student_name}同学。")
+                else:
+                    st.success(f"报名成功！期待在会场见到你，{student_name}同学。")
             except Exception as e:
                 st.error(f"报名失败，请稍后重试。错误信息：{e}")
 
@@ -147,6 +155,7 @@ if st.session_state['admin_logged_in']:
             df = pd.DataFrame(data)
             df['created_at'] = pd.to_datetime(df['created_at']).dt.tz_convert('Asia/Shanghai').dt.strftime('%Y-%m-%d %H:%M:%S')
             
+            # 更新重命名映射，加入模拟面试字段
             df_display = df.rename(columns={
                 "id": "序号",
                 "created_at": "报名时间",
@@ -155,15 +164,28 @@ if st.session_state['admin_logged_in']:
                 "student_class": "班级",
                 "degree_level": "学历",
                 "research_direction": "研究方向",
-                "interested_position": "意向岗位"
+                "interested_position": "意向岗位",
+                "mock_interview": "模拟面试参与意向"
             })
             
-            df_display = df_display[["序号", "报名时间", "姓名", "联系方式", "班级", "学历", "研究方向", "意向岗位"]]
+            # 更新展示列
+            df_display = df_display[["序号", "报名时间", "姓名", "联系方式", "班级", "学历", "研究方向", "意向岗位", "模拟面试参与意向"]]
             
-            st.write("#### 📊 意向岗位热度统计")
-            position_counts = df_display['意向岗位'].value_counts().reset_index()
-            position_counts.columns = ['意向岗位', '报名人数']
-            st.bar_chart(position_counts.set_index('意向岗位'))
+            # 布局排版：并排显示意向岗位统计和面试意向统计
+            st.write("#### 📊 报名意向统计")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**意向岗位热度**")
+                position_counts = df_display['意向岗位'].value_counts().reset_index()
+                position_counts.columns = ['意向岗位', '报名人数']
+                st.bar_chart(position_counts.set_index('意向岗位'))
+                
+            with col2:
+                st.write("**模拟面试参与比例**")
+                interview_counts = df_display['模拟面试参与意向'].value_counts().reset_index()
+                interview_counts.columns = ['选项', '人数']
+                st.bar_chart(interview_counts.set_index('选项'))
             
             st.write("#### 📋 详细名单")
             st.dataframe(df_display, use_container_width=True)
